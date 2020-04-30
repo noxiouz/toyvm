@@ -1,9 +1,8 @@
 pub mod instructions;
+pub mod repl;
 pub mod vm;
 
 fn main() {
-    let mut vm = vm::VM::new();
-    if let Err(err) = vm.run() {
-        println!("VM finished with err {}", err);
-    }
+    let mut r = repl::REPL::new();
+    r.run();
 }

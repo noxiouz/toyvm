@@ -3,11 +3,11 @@ use std::result::Result;
 
 pub struct VM {
     /// Array of `hardware` registers
-    registers: [i32; 32],
+    pub registers: [i32; 32],
     /// Program counter
     pc: usize,
     /// The bytecode of the program being run
-    program: Vec<u8>,
+    pub program: Vec<u8>,
     /// Remainder of modulo division ops
     remainder: u32,
     /// Last comparison result
@@ -31,6 +31,10 @@ impl VM {
         }
     }
 
+    pub fn add_byte(&mut self, byte: u8) {
+        self.program.push(byte)
+    }
+
     pub fn run(&mut self) -> Result<(), u8> {
         loop {
             match self.run_once() {
@@ -52,8 +56,8 @@ impl VM {
                 println!("HLT encountered");
                 Ok(Step::Done)
             }
-            Opcode::IGL => {
-                println!("IGL encountered");
+            Opcode::IGL(opcode) => {
+                println!("IGL {} encountered", opcode);
                 Err(2)
             }
             Opcode::LOAD => {

@@ -20,7 +20,7 @@ pub enum Opcode {
     GTQ,
     LTQ,
     // utility
-    IGL, // Illegal
+    IGL(u8), // Illegal
 }
 
 impl From<u8> for Opcode {
@@ -42,7 +42,7 @@ impl From<u8> for Opcode {
             0xD => Opcode::LT,
             0xE => Opcode::GTQ,
             0xF => Opcode::LTQ,
-            _ => Opcode::IGL,
+            _ => Opcode::IGL(v),
         }
     }
 }
