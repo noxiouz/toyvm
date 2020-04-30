@@ -8,6 +8,12 @@ pub struct VM {
     remainder: u32,
 }
 
+#[derive(Debug)]
+pub enum Step {
+    Done,
+    Continue,
+}
+
 impl VM {
     pub fn new() -> VM {
         VM {
@@ -20,48 +26,76 @@ impl VM {
 
     pub fn run(&mut self) -> Result<(), u8> {
         loop {
-            if self.pc >= self.program.len() {
-                println!("pc overflow");
-                break Err(1);
+            match self.run_once() {
+                Err(err) => break Err(err),
+                Ok(Step::Done) => break Ok(()),
+                Ok(Step::Continue) => (),
             }
+        }
+    }
 
-            match self.decode_opcode() {
-                Opcode::HLT => {
-                    println!("HLT encountered");
-                    break Ok(());
-                }
-                Opcode::IGL => {
-                    println!("IGL encountered");
-                    break Err(2);
-                }
-                Opcode::LOAD => {
-                    let register = self.next_8_bits() as usize;
-                    let number = self.next_16_bits() as u16;
-                    self.registers[register] = number as i32;
-                    continue;
-                }
-                Opcode::ADD => {
-                    let register1 = self.registers[self.next_8_bits() as usize];
-                    let register2 = self.registers[self.next_8_bits() as usize];
-                    self.registers[self.next_8_bits() as usize] = register1 + register2;
-                }
-                Opcode::MUL => {
-                    let register1 = self.registers[self.next_8_bits() as usize];
-                    let register2 = self.registers[self.next_8_bits() as usize];
-                    // TODO: handle overflow
-                    self.registers[self.next_8_bits() as usize] = register1 * register2;
-                }
-                Opcode::SUB => {
-                    let register1 = self.registers[self.next_8_bits() as usize];
-                    let register2 = self.registers[self.next_8_bits() as usize];
-                    self.registers[self.next_8_bits() as usize] = register1 - register2;
-                }
-                Opcode::DIV => {
-                    let register1 = self.registers[self.next_8_bits() as usize];
-                    let register2 = self.registers[self.next_8_bits() as usize];
-                    self.registers[self.next_8_bits() as usize] = register1 / register2;
-                    self.remainder = (register1 % register2) as u32;
-                }
+    pub fn run_once(&mut self) -> Result<Step, u8> {
+        if self.pc >= self.program.len() {
+            println!("pc overflow");
+            return Err(1);
+        }
+
+        match self.decode_opcode() {
+            Opcode::HLT => {
+                println!("HLT encountered");
+                Ok(Step::Done)
+            }
+            Opcode::IGL => {
+                println!("IGL encountered");
+                Err(2)
+            }
+            Opcode::LOAD => {
+                let register = self.next_8_bits() as usize;
+                let number = self.next_16_bits() as u16;
+                self.registers[register] = number as i32;
+                Ok(Step::Continue)
+            }
+            Opcode::ADD => {
+                let register1 = self.registers[self.next_8_bits() as usize];
+                let register2 = self.registers[self.next_8_bits() as usize];
+                self.registers[self.next_8_bits() as usize] = register1 + register2;
+                Ok(Step::Continue)
+            }
+            Opcode::MUL => {
+                let register1 = self.registers[self.next_8_bits() as usize];
+                let register2 = self.registers[self.next_8_bits() as usize];
+                // TODO: handle overflow
+                self.registers[self.next_8_bits() as usize] = register1 * register2;
+                Ok(Step::Continue)
+            }
+            Opcode::SUB => {
+                let register1 = self.registers[self.next_8_bits() as usize];
+                let register2 = self.registers[self.next_8_bits() as usize];
+                self.registers[self.next_8_bits() as usize] = register1 - register2;
+                Ok(Step::Continue)
+            }
+            Opcode::DIV => {
+                let register1 = self.registers[self.next_8_bits() as usize];
+                let register2 = self.registers[self.next_8_bits() as usize];
+                self.registers[self.next_8_bits() as usize] = register1 / register2;
+                self.remainder = (register1 % register2) as u32;
+                Ok(Step::Continue)
+            }
+            Opcode::JMP => {
+                let register = self.next_8_bits() as usize;
+                let jump = self.registers[register];
+                self.pc = jump as usize;
+                Ok(Step::Continue)
+            }
+            Opcode::JMPF => {
+                let value = self.registers[self.next_8_bits() as usize] as usize;
+                self.pc += value;
+                Ok(Step::Continue)
+            }
+            Opcode::JMPB => {
+                let value = self.registers[self.next_8_bits() as usize] as usize;
+                self.pc -= value;
+                Ok(Step::Continue)
             }
         }
     }
@@ -152,5 +186,36 @@ mod tests {
         assert_eq!(test_vm.run(), Ok(()));
         assert_eq!(test_vm.registers[5], 1);
         assert_eq!(test_vm.remainder, 2);
+    }
+
+    #[test]
+    fn test_jmp_opcode() {
+        let mut test_vm = VM::new();
+        test_vm.registers[0] = 1;
+        test_vm.program = vec![6, 0, 0, 0];
+        assert!(matches!(test_vm.run_once(), Ok(Step::Continue)));
+        assert_eq!(test_vm.pc, 1);
+    }
+
+    #[test]
+    fn test_jmpf_opcode() {
+        let mut test_vm = VM::new();
+        test_vm.registers[0] = 2;
+        test_vm.program = vec![7, 0, 0, 0, 6, 0, 0, 0];
+        assert!(matches!(test_vm.run_once(), Ok(Step::Continue)));
+        assert_eq!(test_vm.pc, 4);
+    }
+
+    #[test]
+    fn test_jmpb_opcode() {
+        let mut test_vm = VM::new();
+        test_vm.registers[0] = 2;
+        let jmp = 4;
+        test_vm.program = vec![1, 0, 0, jmp, 8, 0, 0, 0];
+        assert!(matches!(test_vm.run_once(), Ok(Step::Continue)));
+        let before_jmp = test_vm.pc;
+        assert!(matches!(test_vm.run_once(), Ok(Step::Continue)));
+        // +2 comes from JMPB size
+        assert_eq!(test_vm.pc, before_jmp - jmp as usize + 2);
     }
 }
