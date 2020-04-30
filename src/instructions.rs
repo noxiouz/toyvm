@@ -2,15 +2,25 @@
 pub enum Opcode {
     HLT,  // Halt
     LOAD, // Load
+    // math
     ADD,
     MUL,
     SUB,
     DIV,
+    // jumps
     JMP,
     JMPF,
     JMPB,
+    JEQ,
+    // equality
+    EQ,
+    NEQ,
+    GT,
+    LT,
+    GTQ,
+    LTQ,
+    // utility
     IGL, // Illegal
-         // TODO: make it trait to check size, registers and so on
 }
 
 impl From<u8> for Opcode {
@@ -25,6 +35,13 @@ impl From<u8> for Opcode {
             6 => Opcode::JMP,
             7 => Opcode::JMPF,
             8 => Opcode::JMPB,
+            9 => Opcode::JEQ,
+            0xA => Opcode::EQ,
+            0xB => Opcode::NEQ,
+            0xC => Opcode::GT,
+            0xD => Opcode::LT,
+            0xE => Opcode::GTQ,
+            0xF => Opcode::LTQ,
             _ => Opcode::IGL,
         }
     }
