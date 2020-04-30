@@ -63,89 +63,89 @@ impl VM {
                 Ok(Step::Continue)
             }
             Opcode::ADD => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.registers[self.next_8_bits() as usize] = register1 + register2;
+                let (reg_l, reg_r) = self.read_registers_pair();
+                self.registers[self.next_8_bits() as usize] = reg_l + reg_r;
                 Ok(Step::Continue)
             }
             Opcode::MUL => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
+                let (reg_l, reg_r) = self.read_registers_pair();
                 // TODO: handle overflow
-                self.registers[self.next_8_bits() as usize] = register1 * register2;
+                self.registers[self.next_8_bits() as usize] = reg_l * reg_r;
                 Ok(Step::Continue)
             }
             Opcode::SUB => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.registers[self.next_8_bits() as usize] = register1 - register2;
+                let (reg_l, reg_r) = self.read_registers_pair();
+                self.registers[self.next_8_bits() as usize] = reg_l - reg_r;
                 Ok(Step::Continue)
             }
             Opcode::DIV => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.registers[self.next_8_bits() as usize] = register1 / register2;
-                self.remainder = (register1 % register2) as u32;
+                let (reg_l, reg_r) = self.read_registers_pair();
+                self.registers[self.next_8_bits() as usize] = reg_l / reg_r;
+                self.remainder = (reg_l % reg_r) as u32;
                 Ok(Step::Continue)
             }
             Opcode::JMP => {
-                let register = self.next_8_bits() as usize;
-                let jump = self.registers[register];
+                let jump = self.read_register();
                 self.pc = jump as usize;
                 Ok(Step::Continue)
             }
             Opcode::JMPF => {
-                let value = self.registers[self.next_8_bits() as usize] as usize;
+                let value = self.read_register() as usize;
                 self.pc += value;
                 Ok(Step::Continue)
             }
             Opcode::JMPB => {
-                let value = self.registers[self.next_8_bits() as usize] as usize;
+                let value = self.read_register() as usize;
                 self.pc -= value;
                 Ok(Step::Continue)
             }
             Opcode::JEQ => {
-                let register = self.next_8_bits() as usize;
-                let jump = self.registers[register];
+                let jump = self.read_register();
                 if self.equal_flag {
                     self.pc = jump as usize;
                 }
                 Ok(Step::Continue)
             }
             Opcode::EQ => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 == register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l == reg_r
+                };
                 Ok(Step::Continue)
             }
             Opcode::NEQ => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 != register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l != reg_r
+                };
                 Ok(Step::Continue)
             }
             Opcode::GT => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 > register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l > reg_r
+                };
                 Ok(Step::Continue)
             }
             Opcode::LT => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 < register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l < reg_r
+                };
                 Ok(Step::Continue)
             }
             Opcode::GTQ => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 >= register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l >= reg_r
+                };
                 Ok(Step::Continue)
             }
             Opcode::LTQ => {
-                let register1 = self.registers[self.next_8_bits() as usize];
-                let register2 = self.registers[self.next_8_bits() as usize];
-                self.equal_flag = register1 <= register2;
+                self.equal_flag = {
+                    let (reg_l, reg_r) = self.read_registers_pair();
+                    reg_l <= reg_r
+                };
                 Ok(Step::Continue)
             }
         }
@@ -167,6 +167,15 @@ impl VM {
         let result = ((self.program[self.pc] as u16) << 8) | self.program[self.pc + 1] as u16;
         self.pc += 2;
         result
+    }
+
+    fn read_registers_pair(&mut self) -> (i32, i32) {
+        (self.read_register(), self.read_register())
+    }
+
+    // return value of a register that specified in the next program unit
+    fn read_register(&mut self) -> i32 {
+        self.registers[self.next_8_bits() as usize]
     }
 }
 
