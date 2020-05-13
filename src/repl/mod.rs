@@ -1,10 +1,10 @@
-use std;
 use std::io;
 use std::io::Write;
 
 use crate::assembler::program_parsers::program_parser;
 use crate::vm::VM;
 
+#[derive(Default)]
 pub struct REPL {
     vm: VM,
 
@@ -13,13 +13,10 @@ pub struct REPL {
 
 impl REPL {
     pub fn new() -> Self {
-        REPL {
-            vm: VM::new(),
-            commands_buffer: vec![],
-        }
+        Self::default()
     }
 
-    pub fn run(&mut self) -> () {
+    pub fn run(&mut self) {
         println!("welcome");
         loop {
             let mut buffer = String::new();

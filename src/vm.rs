@@ -1,6 +1,7 @@
 use crate::instructions::Opcode;
 use std::result::Result;
 
+#[derive(Default)]
 pub struct VM {
     /// Array of `hardware` registers
     pub registers: [i32; 32],
@@ -21,14 +22,8 @@ pub enum Step {
 }
 
 impl VM {
-    pub fn new() -> VM {
-        VM {
-            registers: [0; 32],
-            pc: 0,
-            program: vec![],
-            remainder: 0,
-            equal_flag: false,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn add_byte(&mut self, byte: u8) {
@@ -240,7 +235,7 @@ mod tests {
         let mut test_vm = VM::new();
         test_vm.program = vec![1, 0, 1, 244, 1, 1, 1, 245, 4, 1, 0, 5, 0];
         assert_eq!(test_vm.run(), Ok(()));
-        assert_eq!(test_vm.registers[5], 250500);
+        assert_eq!(test_vm.registers[5], 250_500);
     }
 
     #[test]

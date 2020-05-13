@@ -1,25 +1,33 @@
 use nom::character::complete::{multispace0, space1};
+use nom::combinator::opt;
 use nom::sequence::{terminated, tuple};
 
+use crate::assembler::label_parsers::label_declaration_parser;
 use crate::assembler::opcode_parsers::opcode_parser;
-use crate::assembler::operand_parsers::integer_operand_parser;
-use crate::assembler::register_parsers::register_parser;
+use crate::assembler::operand_parsers::{integer_operand_parser, register_parser};
 use crate::assembler::Token;
 use crate::instructions::Opcode;
 
 #[derive(Debug, PartialEq)]
+pub enum Action {
+    Opcode(Token),
+    Directive(Token),
+}
+
+#[derive(Debug, PartialEq)]
 pub struct AssemblerInstruction {
-    opcode: Token,
-    operand1: Option<Token>,
-    operand2: Option<Token>,
-    operand3: Option<Token>,
+    pub label: Option<Token>,
+    pub action: Action,
+    pub operand1: Option<Token>,
+    pub operand2: Option<Token>,
+    pub operand3: Option<Token>,
 }
 
 impl AssemblerInstruction {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut results = vec![];
-        match &self.opcode {
-            Token::Op { code } => results.push(u8::from(code)),
+        match &self.action {
+            Action::Opcode(Token::Op(code)) => results.push(u8::from(code)),
             _ => panic!("Non-opcode found in opcode field"),
         };
         // TODO: make it nicer
@@ -39,16 +47,16 @@ impl AssemblerInstruction {
             (None, None, None) => (),
             _ => panic!("malformed AssemblerInstruction"),
         }
-        return results;
+        results
     }
 
     // TODO: add From<Token> for u8
     fn extract_operand(t: &Token, results: &mut Vec<u8>) {
         match t {
-            Token::Register { reg_num } => {
+            Token::Register(reg_num) => {
                 results.push(*reg_num);
             }
-            Token::IntegerOperand { value } => {
+            Token::IntegerOperand(value) => {
                 let converted = *value as u16;
                 let byte1 = converted;
                 let byte2 = converted >> 8;
@@ -64,86 +72,80 @@ impl AssemblerInstruction {
 
 // <$REGISTER> <#VALUE>
 // LOAD $0 #100
-fn args_reg_value(opcode: Token, input: &str) -> nom::IResult<&str, AssemblerInstruction> {
+fn args_reg_value(
+    mut asm_instruction: AssemblerInstruction,
+    input: &str,
+) -> nom::IResult<&str, AssemblerInstruction> {
     let parser = tuple((
         terminated(register_parser, space1),
         terminated(integer_operand_parser, multispace0),
     ));
     let (input, (register, operand)) = parser(input)?;
-    let asm_instruction = AssemblerInstruction {
-        opcode: opcode,
-        operand1: Some(register),
-        operand2: Some(operand),
-        operand3: None,
-    };
+    asm_instruction.operand1.replace(register);
+    asm_instruction.operand2.replace(operand);
     Ok((input, asm_instruction))
 }
 
 // <$REGISTER> <$REGISTER> <$REGISTER>
 // ADD $0 $1 $2\n
-fn args_reg_reg_reg(opcode: Token, input: &str) -> nom::IResult<&str, AssemblerInstruction> {
+fn args_reg_reg_reg(
+    mut asm_instruction: AssemblerInstruction,
+    input: &str,
+) -> nom::IResult<&str, AssemblerInstruction> {
     let parser = tuple((
         terminated(register_parser, space1),
         terminated(register_parser, space1),
         terminated(register_parser, multispace0),
     ));
     let (input, (reg1, reg2, reg3)) = parser(input)?;
-    let asm_instruction = AssemblerInstruction {
-        opcode: opcode,
-        operand1: Some(reg1),
-        operand2: Some(reg2),
-        operand3: Some(reg3),
-    };
+    asm_instruction.operand1.replace(reg1);
+    asm_instruction.operand2.replace(reg2);
+    asm_instruction.operand3.replace(reg3);
     Ok((input, asm_instruction))
 }
 
 // <$REGISTER> <$REGISTER>
 // EQ $0 $1\n
-fn args_reg_reg(opcode: Token, input: &str) -> nom::IResult<&str, AssemblerInstruction> {
+fn args_reg_reg(
+    mut asm_instruction: AssemblerInstruction,
+    input: &str,
+) -> nom::IResult<&str, AssemblerInstruction> {
     let parser = tuple((
         terminated(register_parser, space1),
         terminated(register_parser, multispace0),
     ));
     let (input, (reg1, reg2)) = parser(input)?;
-    let asm_instruction = AssemblerInstruction {
-        opcode: opcode,
-        operand1: Some(reg1),
-        operand2: Some(reg2),
-        operand3: None,
-    };
+    asm_instruction.operand1.replace(reg1);
+    asm_instruction.operand2.replace(reg2);
     Ok((input, asm_instruction))
 }
 
 // <OPCODE> <$REGISTER>
 // JMP $0 \n
-fn args_reg(opcode: Token, input: &str) -> nom::IResult<&str, AssemblerInstruction> {
+fn args_reg(
+    mut asm_instruction: AssemblerInstruction,
+    input: &str,
+) -> nom::IResult<&str, AssemblerInstruction> {
     let parser = terminated(register_parser, multispace0);
     let (input, reg1) = parser(input)?;
-    let asm_instruction = AssemblerInstruction {
-        opcode: opcode,
-        operand1: Some(reg1),
-        operand2: None,
-        operand3: None,
-    };
+    asm_instruction.operand1.replace(reg1);
     Ok((input, asm_instruction))
 }
 
 // // <OPCODE>
 // // HLT
-fn args_none(opcode: Token, input: &str) -> nom::IResult<&str, AssemblerInstruction> {
-    let asm_instruction = AssemblerInstruction {
-        opcode: opcode,
-        operand1: None,
-        operand2: None,
-        operand3: None,
-    };
+fn args_none(
+    asm_instruction: AssemblerInstruction,
+    input: &str,
+) -> nom::IResult<&str, AssemblerInstruction> {
     Ok((input, asm_instruction))
 }
 
 pub fn instruction(input: &str) -> nom::IResult<&str, AssemblerInstruction> {
+    let (input, label) = terminated(opt(label_declaration_parser), multispace0)(input)?;
     let (input, opcode) = terminated(opcode_parser, multispace0)(input)?;
     let parser = match &opcode {
-        Token::Op { code } => match code {
+        Token::Op(code) => match code {
             Opcode::HLT => args_none,
             Opcode::LOAD => args_reg_value,
             Opcode::ADD => args_reg_reg_reg,
@@ -164,7 +166,14 @@ pub fn instruction(input: &str) -> nom::IResult<&str, AssemblerInstruction> {
         },
         _ => panic!("non Opcode output from opcode parser"),
     };
-    parser(opcode, input)
+    let asm_instruction = AssemblerInstruction {
+        label,
+        action: Action::Opcode(opcode),
+        operand1: None,
+        operand2: None,
+        operand3: None,
+    };
+    parser(asm_instruction, input)
 }
 
 #[cfg(test)]
@@ -180,9 +189,10 @@ mod tests {
             Ok((
                 "",
                 AssemblerInstruction {
-                    opcode: Token::Op { code: Opcode::LOAD },
-                    operand1: Some(Token::Register { reg_num: 0 }),
-                    operand2: Some(Token::IntegerOperand { value: 100 }),
+                    label: None,
+                    action: Action::Opcode(Token::Op(Opcode::LOAD)),
+                    operand1: Some(Token::Register(0)),
+                    operand2: Some(Token::IntegerOperand(100)),
                     operand3: None
                 }
             ))
@@ -191,16 +201,17 @@ mod tests {
 
     #[test]
     fn test_parse_instruction_reg_reg_reg() {
-        let result = instruction("ADD $0 $1 $2\n");
+        let result = instruction("add:  ADD $0 $1 $2\n");
         assert_eq!(
             result,
             Ok((
                 "",
                 AssemblerInstruction {
-                    opcode: Token::Op { code: Opcode::ADD },
-                    operand1: Some(Token::Register { reg_num: 0 }),
-                    operand2: Some(Token::Register { reg_num: 1 }),
-                    operand3: Some(Token::Register { reg_num: 2 }),
+                    label: Some(Token::LabelDeclaration("add".to_string())),
+                    action: Action::Opcode(Token::Op(Opcode::ADD)),
+                    operand1: Some(Token::Register(0)),
+                    operand2: Some(Token::Register(1)),
+                    operand3: Some(Token::Register(2)),
                 }
             ))
         );
@@ -214,7 +225,8 @@ mod tests {
             Ok((
                 "",
                 AssemblerInstruction {
-                    opcode: Token::Op { code: Opcode::HLT },
+                    label: None,
+                    action: Action::Opcode(Token::Op(Opcode::HLT)),
                     operand1: None,
                     operand2: None,
                     operand3: None,
@@ -231,9 +243,10 @@ mod tests {
             Ok((
                 "",
                 AssemblerInstruction {
-                    opcode: Token::Op { code: Opcode::LOAD },
-                    operand1: Some(Token::Register { reg_num: 0 }),
-                    operand2: Some(Token::IntegerOperand { value: 100 }),
+                    label: None,
+                    action: Action::Opcode(Token::Op(Opcode::LOAD)),
+                    operand1: Some(Token::Register(0)),
+                    operand2: Some(Token::IntegerOperand(100)),
                     operand3: None
                 }
             ))
@@ -250,14 +263,15 @@ mod tests {
 
     #[test]
     fn test_parse_instruction_reg() {
-        let result = instruction("JMP $9");
+        let result = instruction("jump: JMP $9");
         assert_eq!(
             result,
             Ok((
                 "",
                 AssemblerInstruction {
-                    opcode: Token::Op { code: Opcode::JMP },
-                    operand1: Some(Token::Register { reg_num: 9 }),
+                    label: Some(Token::LabelDeclaration("jump".to_string())),
+                    action: Action::Opcode(Token::Op(Opcode::JMP)),
+                    operand1: Some(Token::Register(9)),
                     operand2: None,
                     operand3: None
                 }

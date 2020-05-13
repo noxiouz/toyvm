@@ -1,5 +1,6 @@
-use crate::assembler::instruction_parsers::{instruction, AssemblerInstruction};
 use nom::multi::many1;
+
+use crate::assembler::instruction_parsers::{instruction, AssemblerInstruction};
 
 #[derive(Debug, PartialEq)]
 pub struct Program {
@@ -18,12 +19,7 @@ impl Program {
 
 pub fn program_parser(input: &str) -> nom::IResult<&str, Program> {
     let (input, instructions) = many1(instruction)(input)?;
-    Ok((
-        input,
-        Program {
-            instructions: instructions,
-        },
-    ))
+    Ok((input, Program { instructions }))
 }
 
 #[test]
